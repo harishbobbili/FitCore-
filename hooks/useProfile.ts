@@ -67,7 +67,7 @@ export function useProfile() {
         if (!resolvedProfile) {
           const { data: inserted, error: insertError } = await supabase
             .from("profiles")
-            .insert({ id: userId, ...defaultProfileValues })
+            .upsert({ id: userId, ...defaultProfileValues }, { onConflict: "id", ignoreDuplicates: true })
             .select("*")
             .single();
 

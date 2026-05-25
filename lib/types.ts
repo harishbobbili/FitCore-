@@ -15,6 +15,7 @@ export type WorkoutSplitKey =
 export interface Profile {
   id: string;
   name: string | null;
+  gender?: "male" | "female";
   height_cm: number | null;
   weight_kg: number | null;
   goal: string | null;

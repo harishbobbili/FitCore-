@@ -8,6 +8,7 @@ import ExerciseCard from "./ExerciseCard";
 import GlassCard from "@/components/ui/GlassCard";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
+import useWorkout from "@/hooks/useWorkout";
 import { 
   Play, 
   Square, 
@@ -65,7 +66,7 @@ export default function WorkoutSessionManager({
   preCreatedSessionId,
 }: WorkoutSessionManagerProps) {
   const router = useRouter();
-  const incrementStreak = () => undefined;
+  const { finishSession } = useWorkout();
   
   const activeSession = useAppStore((state) => state.activeSession);
   const setActiveSession = useAppStore((state) => state.setActiveSession);
@@ -79,6 +80,14 @@ export default function WorkoutSessionManager({
   useEffect(() => {
     setExercises(initialExercises);
   }, [initialExercises]);
+
+  // Restore session from sessionStorage on mount
+  useEffect(() => {
+    const restoredSession = useAppStore.getState().activeSession;
+    if (restoredSession) {
+      setIsWorkoutActive(true);
+    }
+  }, []);
 
   // Workout state
   const [isWorkoutActive, setIsWorkoutActive] = useState(false);
@@ -339,21 +348,26 @@ export default function WorkoutSessionManager({
     }
 
     try {
-      const res = await fetch(`/api/workout/session?id=${activeSession.id}`, {
-        method: "DELETE",
-      });
+      const { supabase } = await import("@/lib/supabase/client");
+      const { error } = await supabase
+        .from("workout_sessions")
+        .delete()
+        .eq("id", activeSession.id);
 
-      if (res.ok) {
-        setActiveSession(null);
-        setExerciseSets([]);
-        setIsWorkoutActive(false);
-        setIsRestActive(false);
-        setCompletedSets({});
-        setExerciseNotes({});
-        setShowDiscardConfirm(false);
-      } else {
-        alert("Failed to discard session. Please try again.");
+      if (error) {
+        throw error;
       }
+
+      setActiveSession(null);
+      setExerciseSets([]);
+      sessionStorage.removeItem("fitcore_activeSession");
+      sessionStorage.removeItem("fitcore_exerciseSets");
+      setIsWorkoutActive(false);
+      setIsRestActive(false);
+      setCompletedSets({});
+      setExerciseNotes({});
+      setShowDiscardConfirm(false);
+      router.push("/workout");
     } catch (error) {
       console.error("Error discarding session:", error);
       alert("Failed to discard session. Please try again.");
@@ -526,8 +540,8 @@ export default function WorkoutSessionManager({
 
       const caloriesBurned = durationMins * 5; // ~5 kcal/min estimation
 
-      // 6. Update user's streak in Zustand store
-      incrementStreak();
+      // 6. Call useWorkout finishSession to handle streak, achievements, and calories_burned
+      await finishSession(aggregatedNotes);
 
       // Set summary view
       setSummaryData({
@@ -602,7 +616,7 @@ export default function WorkoutSessionManager({
               <Square className="w-3.5 h-3.5 fill-white/80" /> Cancel
             </NeonButton>
 
-            {activeSession && (
+            {isWorkoutActive && (
               <NeonButton
                 variant="ghost"
                 onClick={() => setShowDiscardConfirm(true)}

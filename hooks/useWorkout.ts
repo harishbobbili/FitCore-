@@ -118,7 +118,8 @@ export function useWorkout() {
     }
 
     const durationMins = minutesBetween(session.started_at);
-    const weightKg = profile?.weight_kg ?? 63;
+    const currentProfile = useAppStore.getState().profile;
+    const weightKg = currentProfile?.weight_kg ?? 70;
     const caloriesBurned = Math.round(0.0175 * workoutMet(session.split_name) * weightKg * durationMins);
 
     const { data, error } = await supabase
@@ -165,15 +166,17 @@ export function useWorkout() {
     const { data: achievements } = await supabase.from("achievements").select("badge_id").eq("user_id", userId);
     const earnedBadges = new Set((achievements ?? []).map((row: { badge_id: string }) => row.badge_id));
 
+    const { count: prCount } = await supabase.from("exercise_sets").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_pr", true);
+
     const unlocked: string[] = [];
     BADGE_DEFINITIONS.forEach((badge) => {
-      if (badge.triggerType === "workout_count" && data && !earnedBadges.has(badge.id)) {
+      if (badge.triggerType === "workout_count" && (workoutCount ?? 0) >= badge.threshold && !earnedBadges.has(badge.id)) {
         unlocked.push(badge.title);
       }
       if (badge.triggerType === "streak" && nextCurrent >= badge.threshold && !earnedBadges.has(badge.id)) {
         unlocked.push(badge.title);
       }
-      if (badge.triggerType === "pr_count" && data && !earnedBadges.has(badge.id)) {
+      if (badge.triggerType === "pr_count" && (prCount ?? 0) >= badge.threshold && !earnedBadges.has(badge.id)) {
         unlocked.push(badge.title);
       }
     });
