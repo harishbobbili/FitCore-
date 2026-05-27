@@ -1,0 +1,50 @@
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request: { headers: request.headers } });
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://invalid.supabase.co";
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "invalid-anon-key";
+
+  const supabase = createServerClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            response = NextResponse.next({ request: { headers: request.headers } });
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const isAuthPage = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/signup") || request.nextUrl.pathname.startsWith("/forgot-password");
+  const isProtected = request.nextUrl.pathname.startsWith("/dashboard") || request.nextUrl.pathname.startsWith("/calendar") || request.nextUrl.pathname.startsWith("/workout") || request.nextUrl.pathname.startsWith("/diet") || request.nextUrl.pathname.startsWith("/cardio") || request.nextUrl.pathname.startsWith("/abs") || request.nextUrl.pathname.startsWith("/analytics") || request.nextUrl.pathname.startsWith("/profile");
+
+  if (isProtected && !session) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  if (isAuthPage && session) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: ["/dashboard/:path*", "/calendar/:path*", "/workout/:path*", "/diet/:path*", "/cardio/:path*", "/abs/:path*", "/analytics/:path*", "/profile/:path*", "/login", "/signup", "/forgot-password"],
+};
