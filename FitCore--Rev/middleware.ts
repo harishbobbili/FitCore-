@@ -17,9 +17,15 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
+          cookiesToSet.forEach(({ name, value }) => {
             request.cookies.set(name, value);
-            response = NextResponse.next({ request: { headers: request.headers } });
+          });
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          });
+          cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
         },
@@ -35,11 +41,35 @@ export async function middleware(request: NextRequest) {
   const isProtected = request.nextUrl.pathname.startsWith("/dashboard") || request.nextUrl.pathname.startsWith("/calendar") || request.nextUrl.pathname.startsWith("/workout") || request.nextUrl.pathname.startsWith("/diet") || request.nextUrl.pathname.startsWith("/cardio") || request.nextUrl.pathname.startsWith("/abs") || request.nextUrl.pathname.startsWith("/analytics") || request.nextUrl.pathname.startsWith("/profile");
 
   if (isProtected && !session) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const redirectResponse = NextResponse.redirect(new URL("/login", request.url));
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        maxAge: cookie.maxAge,
+        expires: cookie.expires,
+        sameSite: cookie.sameSite,
+      });
+    });
+    return redirectResponse;
   }
 
   if (isAuthPage && session) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    const redirectResponse = NextResponse.redirect(new URL("/dashboard", request.url));
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value, {
+        path: cookie.path,
+        domain: cookie.domain,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        maxAge: cookie.maxAge,
+        expires: cookie.expires,
+        sameSite: cookie.sameSite,
+      });
+    });
+    return redirectResponse;
   }
 
   return response;
