@@ -51,19 +51,19 @@ const mockAchievements: AchievementRow[] = [
   {
     id: "ach-1",
     user_id: "00000000-0000-0000-0000-000000000000",
-    badge_id: "first_workout",
+    badge_id: "first-step",
     earned_at: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: "ach-2",
     user_id: "00000000-0000-0000-0000-000000000000",
-    badge_id: "perfect_week_nutrition",
+    badge_id: "diet-master",
     earned_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: "ach-3",
     user_id: "00000000-0000-0000-0000-000000000000",
-    badge_id: "step_master",
+    badge_id: "step-master",
     earned_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   }
 ];

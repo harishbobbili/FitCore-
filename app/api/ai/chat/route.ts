@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     if (!user?.id) return unauthorized();
 
     // Rate limiting
-    const limit = checkAiChatLimit(user.id);
+    const limit = await checkAiChatLimit(user.id);
     if (!limit.allowed) {
       const retryAfter = Math.ceil((limit.resetAt - Date.now()) / 1000);
       return tooManyRequests(retryAfter);
@@ -108,6 +108,22 @@ Guidelines:
 
     const apiKey = getAnthropicKey();
 
+    // Sanitize messages to prevent prompt injection
+    const INJECTION_PATTERNS = [
+      /^ignore previous instructions/i,
+      /^system:/i,
+      /^assistant:/i,
+      /^human:/i,
+    ];
+
+    const sanitizedMessages = messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .filter(m => !INJECTION_PATTERNS.some(p => p.test(m.content)))
+      .map(m => ({
+        role: m.role,
+        content: m.content.length > 8000 ? m.content.slice(0, 8000) : m.content,
+      }));
+
     if (!apiKey) {
       // Rule-based fallback
       const lastMsg = messages[messages.length - 1]?.content?.toLowerCase() ?? "";
@@ -158,7 +174,7 @@ Guidelines:
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1024,
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        messages: sanitizedMessages,
         system: systemPrompt,
         stream: true,
       }),

@@ -102,16 +102,16 @@ export function useMeals() {
     setMeals(remaining);
     refreshDailyTotals();
 
-    const userId = await getSessionUserId();
-    if (!userId) return;
-
-    const repo = getMealsRepository();
-    const { error } = await repo.delete(userId, id);
-
-    if (error) {
+    try {
+      const res = await fetch(`/api/meals?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to delete meal');
+      }
+    } catch (error) {
       setMeals(snapshotMeals);
       refreshDailyTotals();
-      showErrorToast(error.message);
+      showErrorToast(error instanceof Error ? error.message : 'Failed to delete meal');
     }
   };
 

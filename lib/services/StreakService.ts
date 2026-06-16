@@ -14,8 +14,8 @@ export class StreakService {
     const current = new Date(currentDate);
     const diffDays = Math.floor((current.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Streak continues if worked out within the last 2 days
-    return diffDays <= 2;
+    // Streak continues only if worked out on consecutive days (no day-skipping allowed)
+    return diffDays === 1;
   }
 
   /**

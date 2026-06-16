@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     const user = await getAuthUser();
     if (!user?.id) return unauthorized();
 
-    const limit = checkAiMealLimit(user.id);
+    const limit = await checkAiMealLimit(user.id);
     if (!limit.allowed) {
       return tooManyRequests(Math.ceil((limit.resetAt - Date.now()) / 1000));
     }

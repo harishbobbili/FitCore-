@@ -37,42 +37,6 @@ export class WorkoutBusinessService {
   }
 
   /**
-   * Calculate updated streak after workout
-   */
-  static calculateStreakUpdate(
-    currentStreak: Streak | null,
-    today: string
-  ): Partial<Streak> {
-    const lastWorkoutDate = currentStreak?.last_workout_date ?? null;
-
-    let nextCurrent = currentStreak?.current_streak ?? 0;
-    let nextLongest = currentStreak?.longest_streak ?? 0;
-
-    if (lastWorkoutDate === today) {
-      // Already logged today — don't touch the streak
-    } else if (lastWorkoutDate) {
-      const last = new Date(lastWorkoutDate);
-      const todayDate = new Date(today);
-      const diffDays = Math.round((todayDate.getTime() - last.getTime()) / 86_400_000);
-      if (diffDays === 1) {
-        nextCurrent = (currentStreak?.current_streak ?? 0) + 1;
-      } else if (diffDays > 1) {
-        nextCurrent = 1;
-      }
-      nextLongest = Math.max(currentStreak?.longest_streak ?? 0, nextCurrent);
-    } else {
-      nextCurrent = 1;
-      nextLongest = 1;
-    }
-
-    return {
-      current_streak: nextCurrent,
-      longest_streak: nextLongest,
-      last_workout_date: today,
-    };
-  }
-
-  /**
    * Check which achievements should be unlocked after a workout
    */
   static checkWorkoutAchievements(

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { Profile, DailyLog, Meal, WorkoutSession, ExerciseSet, Streak } from "@/lib/types";
+import type { Profile, DailyLog, Meal, WorkoutSession, ExerciseSet, Streak, WeeklyAnalytics } from "@/lib/types";
 
 // Unified store interface
 interface AppStore {
@@ -18,6 +18,9 @@ interface AppStore {
 
   streak: Streak | null;
   setStreak: (streak: Streak | null) => void;
+
+  weeklyAnalytics: WeeklyAnalytics | null;
+  setWeeklyAnalytics: (data: WeeklyAnalytics | null) => void;
 
   // Cache layer
   lastFetched: Record<string, number>;
@@ -49,7 +52,7 @@ export const useAppStore = create<AppStore>((set) => ({
   setStreak: (streak) => set({ streak }),
 
   weeklyAnalytics: null,
-  setWeeklyAnalytics: (weeklyAnalytics: any | null) => set({ weeklyAnalytics }),
+  setWeeklyAnalytics: (weeklyAnalytics: WeeklyAnalytics | null) => set({ weeklyAnalytics }),
 
   // Cache layer
   lastFetched: {},

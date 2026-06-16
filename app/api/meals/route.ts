@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { isSupabaseConfigured, getAuthUser, createClient } from "@/lib/supabase/server";
 import { mockDb } from "@/lib/supabase/mockDb";
 import { CreateMealSchema, DeleteMealSchema } from "@/lib/validation";
@@ -11,28 +12,42 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date") ?? new Date().toISOString().split("T")[0];
+    const timezone = searchParams.get("timezone") ?? "UTC";
+    const limit = parseInt(searchParams.get("limit") ?? "50", 10);
+    const offset = parseInt(searchParams.get("offset") ?? "0", 10);
 
     // Basic date format validation
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return badRequest("Invalid date format. Use YYYY-MM-DD.");
     }
 
+    // Compute local day boundaries in UTC
+    const startOfDay = new Date(`${date}T00:00:00`);
+    const endOfDay = new Date(`${date}T23:59:59.999`);
+    
+    const startUTC = new Date(startOfDay.toLocaleString("en-US", { timeZone: timezone }));
+    const endUTC = new Date(endOfDay.toLocaleString("en-US", { timeZone: timezone }));
+    
+    const startISO = startUTC.toISOString();
+    const endISO = endUTC.toISOString();
+
     if (!isSupabaseConfigured()) {
       const data = await mockDb.getMeals(user.id, date);
-      return ok(data);
+      return ok({ data, count: data.length, hasMore: false });
     }
 
     const supabase = createClient();
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from("meals")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("user_id", user.id)
-      .gte("time_logged", `${date}T00:00:00.000Z`)
-      .lte("time_logged", `${date}T23:59:59.999Z`)
-      .order("time_logged", { ascending: true });
+      .gte("time_logged", startISO)
+      .lte("time_logged", endISO)
+      .order("time_logged", { ascending: true })
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return ok(data ?? []);
+    return ok({ data: data ?? [], count: count ?? 0, hasMore: (data?.length ?? 0) === limit });
   } catch (error) {
     return handleApiError(error);
   }
@@ -122,11 +137,16 @@ export async function DELETE(request: NextRequest) {
     const user = await getAuthUser();
     if (!user?.id) return unauthorized();
 
-    const body = await request.json();
-    const { id } = DeleteMealSchema.parse(body);
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    
+    const uuidValidation = z.string().uuid().safeParse(id);
+    if (!uuidValidation.success) {
+      return badRequest("Invalid meal ID format.");
+    }
 
     if (!isSupabaseConfigured()) {
-      await mockDb.deleteMeal(user.id, id);
+      await mockDb.deleteMeal(user.id, uuidValidation.data);
       return ok({ deleted: true });
     }
 
@@ -134,7 +154,7 @@ export async function DELETE(request: NextRequest) {
     const { error } = await supabase
       .from("meals")
       .delete()
-      .eq("id", id)
+      .eq("id", uuidValidation.data)
       .eq("user_id", user.id);
 
     if (error) throw error;

@@ -118,8 +118,20 @@ export function useWorkout() {
 
     const today = new Date().toISOString().split("T")[0];
 
-    // Calculate streak update
-    const streakUpdate = WorkoutBusinessService.calculateStreakUpdate(streak, today);
+    // Calculate streak update using StreakService
+    const currentStreak = streak ? {
+      currentStreak: streak.current_streak ?? 0,
+      longestStreak: streak.longest_streak ?? 0,
+      lastWorkoutDate: streak.last_workout_date ?? null,
+    } : { currentStreak: 0, longestStreak: 0, lastWorkoutDate: null };
+
+    const updatedStreakData = StreakService.calculateUpdatedStreak(currentStreak, today);
+    const streakUpdate = {
+      current_streak: updatedStreakData.currentStreak,
+      longest_streak: updatedStreakData.longestStreak,
+      last_workout_date: updatedStreakData.lastWorkoutDate,
+    };
+
     const { data: updatedStreak } = await streakRepo.update(userId, streakUpdate);
 
     if (updatedStreak) {

@@ -185,3 +185,29 @@ export interface BodyAnalysisResult {
   comparison_to_previous: string | null;
   analyzed_at: string;
 }
+
+export interface WeeklyAnalytics {
+  daily_history: Array<{
+    id: string;
+    user_id: string;
+    date: string;
+    calories_consumed: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+    water_ml: number;
+    steps: number;
+    sleep_hours: number;
+    mood_score: number | null;
+    weight_kg: number | null;
+  }>;
+  summary: {
+    avg_calories: number;
+    avg_protein: number;
+    avg_steps: number;
+    avg_sleep: number;
+    avg_water: number;
+    avg_weight: number | null;
+    workout_count: number;
+  };
+}

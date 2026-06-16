@@ -9,7 +9,7 @@ export async function GET() {
     const user = await getAuthUser();
     if (!user?.id) return unauthorized();
 
-    const limit = checkCalorieAdjustLimit(user.id);
+    const limit = await checkCalorieAdjustLimit(user.id);
     if (!limit.allowed) {
       return tooManyRequests(Math.ceil((limit.resetAt - Date.now()) / 1000));
     }

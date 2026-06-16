@@ -81,11 +81,12 @@ export class AchievementService {
   static getNextAchievement(
     allAchievements: AchievementData[],
     earnedBadges: Set<string>,
-    currentValue: number
+    currentValue: number,
+    triggerType?: string
   ): AchievementData | null {
-    const available = allAchievements
+    const candidates = triggerType ? allAchievements.filter(a => a.triggerType === triggerType) : allAchievements;
+    const available = candidates
       .filter(a => !earnedBadges.has(a.badgeId))
-      .filter(a => a.triggerType === allAchievements[0]?.triggerType)
       .sort((a, b) => a.threshold - b.threshold);
 
     return available.find(a => a.threshold > currentValue) || null;

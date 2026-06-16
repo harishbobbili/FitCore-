@@ -4,6 +4,7 @@ import { mockDb } from "@/lib/supabase/mockDb";
 import { CreateWorkoutSessionSchema } from "@/lib/validation";
 import { ok, unauthorized, handleApiError } from "@/lib/api-response";
 import { workoutCaloriesBurned } from "@/lib/calories";
+import { StreakService } from "@/lib/services/StreakService";
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,63 +64,47 @@ export async function POST(request: NextRequest) {
       if (error) throw error;
       result = data;
 
-      // Update streak (non-fatal)
-      await updateStreak(user.id, sessionDate).catch(e => console.warn("Streak update failed:", e));
+      // Update streak using StreakService (non-fatal)
+      try {
+        const streakClient = createClient();
+        const { data: streak } = await streakClient
+          .from("streaks")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const currentStreak = streak ? {
+          currentStreak: streak.current_streak ?? 0,
+          longestStreak: streak.longest_streak ?? 0,
+          lastWorkoutDate: streak.last_workout_date ?? null,
+        } : { currentStreak: 0, longestStreak: 0, lastWorkoutDate: null };
+
+        const updatedStreak = StreakService.calculateUpdatedStreak(currentStreak, sessionDate);
+
+        if (!streak) {
+          await streakClient.from("streaks").insert({
+            user_id: user.id,
+            current_streak: updatedStreak.currentStreak,
+            longest_streak: updatedStreak.longestStreak,
+            last_workout_date: updatedStreak.lastWorkoutDate,
+          });
+        } else {
+          await streakClient
+            .from("streaks")
+            .update({
+              current_streak: updatedStreak.currentStreak,
+              longest_streak: updatedStreak.longestStreak,
+              last_workout_date: updatedStreak.lastWorkoutDate,
+            })
+            .eq("user_id", user.id);
+        }
+      } catch (e) {
+        console.warn("Streak update failed:", e);
+      }
     }
 
     return ok(result, 201);
   } catch (error) {
     return handleApiError(error);
   }
-}
-
-async function updateStreak(userId: string, sessionDate: string) {
-  const supabase = createClient();
-  const { data: streak } = await supabase
-    .from("streaks")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (!streak) {
-    await supabase.from("streaks").insert({
-      user_id: userId, current_streak: 1, longest_streak: 1, last_workout_date: sessionDate,
-    });
-    return;
-  }
-
-  let current = streak.current_streak ?? 0;
-  let longest = streak.longest_streak ?? 0;
-  const last = streak.last_workout_date;
-
-  if (last) {
-    const lastDate = new Date(last);
-    const currentDate = new Date(sessionDate);
-    // Normalise to calendar days — compare date strings to avoid timezone edge cases
-    const lastDay = lastDate.toISOString().split("T")[0];
-    const currentDay = currentDate.toISOString().split("T")[0];
-
-    if (currentDay === lastDay) {
-      // Same day — don't double-count
-      return;
-    }
-
-    const diffMs = currentDate.setHours(0, 0, 0, 0) - lastDate.setHours(0, 0, 0, 0);
-    const diffDays = Math.round(diffMs / 86_400_000);
-
-    if (diffDays === 1) {
-      current += 1;
-      longest = Math.max(longest, current);
-    } else if (diffDays > 1) {
-      current = 1;
-    }
-  } else {
-    current = 1;
-    longest = Math.max(longest, 1);
-  }
-
-  await supabase
-    .from("streaks")
-    .update({ current_streak: current, longest_streak: longest, last_workout_date: sessionDate })
-    .eq("user_id", userId);
 }

@@ -53,10 +53,10 @@ export const DeleteMealSchema = z.object({
 
 export const UpsertDailyLogSchema = z.object({
   date: dateString.optional(),
-  calories_consumed: positiveNumber.max(99999).optional(),
-  protein_g: positiveNumber.max(9999).optional(),
-  carbs_g: positiveNumber.max(9999).optional(),
-  fat_g: positiveNumber.max(9999).optional(),
+  calories_consumed: positiveNumber.max(10000, "Daily calories over 10,000 seems unrealistic").optional(),
+  protein_g: positiveNumber.max(500, "Protein over 500g seems unrealistic").optional(),
+  carbs_g: positiveNumber.max(1500, "Carbs over 1500g seems unrealistic").optional(),
+  fat_g: positiveNumber.max(500, "Fat over 500g seems unrealistic").optional(),
   water_ml: positiveInt.max(99999).optional(),
   steps: positiveInt.max(999999).optional(),
   sleep_hours: z.number().min(0).max(24, "Sleep hours must be between 0 and 24").optional(),
@@ -89,7 +89,7 @@ export const CreateBodyMetricSchema = z.object({
     .number()
     .positive("Weight must be positive")
     .max(999, "Weight value is too high"),
-  body_fat_pct: z.number().min(2).max(70, "Body fat % seems unrealistic").optional().nullable(),
+  body_fat_pct: z.number().min(3, "Body fat % below 3% is physiologically impossible").max(60, "Above 60% seems unrealistic").optional().nullable(),
   chest_cm: positiveNumber.max(999).optional().nullable(),
   waist_cm: positiveNumber.max(999).optional().nullable(),
   hip_cm: positiveNumber.max(999).optional().nullable(),

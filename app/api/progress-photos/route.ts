@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { ProgressPhoto, BodyAnalysisResult } from "@/lib/types";
 import { PhotoAngleEnum } from "@/lib/validation";
 import { ok, unauthorized, badRequest, notFound, forbidden, serverError, handleApiError } from "@/lib/api-response";
 import { getAnthropicKey } from "@/lib/env";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseAdmin = createSupabaseClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const BUCKET_NAME = "progress-photos";
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -16,7 +17,7 @@ const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export async function POST(request: NextRequest) {
   try {
-    if (!SUPABASE_URL || !SUPABASE_KEY) return serverError("Supabase is not configured.");
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return serverError("Supabase is not configured.");
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -47,29 +48,26 @@ export async function POST(request: NextRequest) {
 
     // Upload to Supabase Storage
     const fileBuffer = await file.arrayBuffer();
-    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filePath}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": file.type, "x-upsert": "true" },
-      body: fileBuffer,
-    });
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, fileBuffer, { contentType: file.type, upsert: true });
 
-    if (!uploadRes.ok) {
-      console.error("Supabase upload error:", await uploadRes.text());
+    if (uploadError) {
+      console.error("Supabase upload error:", uploadError);
       return serverError("Failed to upload file.");
     }
 
     // Signed URL for AI analysis
-    const signedUrlRes = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/sign/${BUCKET_NAME}/${filePath}?expires=3600`,
-      { method: "POST", headers: { Authorization: `Bearer ${SUPABASE_KEY}` } }
-    );
+    const { data: signedUrlData, error: signedUrlError } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .createSignedUrl(filePath, 3600);
 
     let analysis: BodyAnalysisResult | null = null;
     const apiKey = getAnthropicKey();
 
-    if (signedUrlRes.ok && apiKey) {
+    if (!signedUrlError && apiKey) {
       try {
-        const { signedUrl } = await signedUrlRes.json();
+        const signedUrl = signedUrlData?.signedUrl;
         const imgBuffer = await (await fetch(signedUrl)).arrayBuffer();
         const base64 = Buffer.from(imgBuffer).toString("base64");
 
@@ -124,11 +122,10 @@ export async function POST(request: NextRequest) {
     // Fresh signed URL for response
     let finalSignedUrl: string | null = null;
     try {
-      const r = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/sign/${BUCKET_NAME}/${filePath}?expires=3600`,
-        { method: "POST", headers: { Authorization: `Bearer ${SUPABASE_KEY}` } }
-      );
-      if (r.ok) finalSignedUrl = (await r.json()).signedUrl;
+      const { data } = await supabaseAdmin.storage
+        .from(BUCKET_NAME)
+        .createSignedUrl(filePath, 3600);
+      finalSignedUrl = data?.signedUrl ?? null;
     } catch { /* non-fatal */ }
 
     return ok({ photo: { ...photo, signed_url: finalSignedUrl }, analysis }, 201);
@@ -139,7 +136,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    if (!SUPABASE_URL || !SUPABASE_KEY) return serverError("Supabase is not configured.");
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return serverError("Supabase is not configured.");
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -154,20 +151,16 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Attach signed URLs in parallel
-    const photosWithUrls = await Promise.all(
-      (photos ?? []).map(async (photo: ProgressPhoto) => {
-        try {
-          const r = await fetch(
-            `${SUPABASE_URL}/storage/v1/object/sign/${BUCKET_NAME}/${photo.photo_url}?expires=3600`,
-            { method: "POST", headers: { Authorization: `Bearer ${SUPABASE_KEY}` } }
-          );
-          return { ...photo, signed_url: r.ok ? (await r.json()).signedUrl : null };
-        } catch {
-          return { ...photo, signed_url: null };
-        }
-      })
-    );
+    // Batch signed URLs
+    const photoPaths = (photos ?? []).map(p => p.photo_url);
+    const { data: signedUrls } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .createSignedUrls(photoPaths, 3600);
+
+    const photosWithUrls = (photos ?? []).map((photo, index) => ({
+      ...photo,
+      signed_url: signedUrls?.[index]?.signedUrl ?? null,
+    }));
 
     return ok(photosWithUrls);
   } catch (error) {
@@ -177,7 +170,7 @@ export async function GET() {
 
 export async function DELETE(request: NextRequest) {
   try {
-    if (!SUPABASE_URL || !SUPABASE_KEY) return serverError("Supabase is not configured.");
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return serverError("Supabase is not configured.");
 
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -191,16 +184,16 @@ export async function DELETE(request: NextRequest) {
       .from("progress_photos")
       .select("*")
       .eq("id", photoId)
+      .eq("user_id", user.id)
       .single();
 
     if (fetchError || !photo) return notFound("Photo");
-    if (photo.user_id !== user.id) return forbidden();
 
     // Delete from storage (non-fatal)
-    await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${photo.photo_url}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${SUPABASE_KEY}` },
-    }).catch(e => console.warn("Storage delete failed:", e));
+    await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .remove([photo.photo_url])
+      .catch(e => console.warn("Storage delete failed:", e));
 
     const { error: deleteError } = await supabase
       .from("progress_photos")
