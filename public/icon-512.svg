@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#0A0A0F"/>
+  <defs>
+    <linearGradient id="fitcoreGradient512" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6C63FF"/>
+      <stop offset="1" stop-color="#00D4FF"/>
+    </linearGradient>
+  </defs>
+  <path d="M138 128H374V171H186V246H336V288H186V384H138V128Z" fill="url(#fitcoreGradient512)"/>
+</svg>
